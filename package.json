@@ -6,7 +6,16 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
+  "bin": {
+    "csproj-sync": "./bin/index.js"
+  },
   "keywords": [],
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "dependencies": {
+    "args": "^3.0.4",
+    "glob": "^7.1.2",
+    "lodash": "^4.17.4",
+    "xml2js": "^0.4.19"
+  }
 }
