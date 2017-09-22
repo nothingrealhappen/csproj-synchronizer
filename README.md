@@ -1,7 +1,7 @@
 csproj-synchronizer
 --------
 ## Goal
-1. check csproj file's content, make sure all <Content Include="sompath/foo/bar.js"><//Content> file is exist in project. if not exit with code 1.
+1. check csproj file's content, make sure all `<Content Include="sompath/foo/bar.js"></Content>` file is exist in project. if not exit with code 1.
 2. check all file is added into csproj file as index. if not throw error with exit code 1.
 3. [todo] Automaticly fix issues and overwrite back to csproj file.
 
