@@ -15,7 +15,7 @@ args
 
 const flags = args.parse(process.argv);
 
-console.log(flags);
+console.log('running csproj file sync by file:', flags.file);
 
 let checkPathConfig;
 
@@ -74,13 +74,14 @@ function syncFilesToCsproj(data){
             const groupedFiles =  _.groupBy(files, file => _.includes(allIncludedFiles, file));
             const missingFilesInCsproj = groupedFiles.false;
             if (_.isEmpty(missingFilesInCsproj)) {
+                console.log('all good for csproj-sync');
                 process.exit(0);
             }
 
             const itemGroupForMissingFiles = findItemGroupByFilePath(data, groupedFiles.true[0]);
 
             console.log('missing below files in csproj');
-            console.log(missingFilesInCsproj);
+            missingFilesInCsproj.forEach(item => console.log(item));
 
             if (flags.autoFix) {
                 addMissingFileToCsproj(data, missingFilesInCsproj, itemGroupForMissingFiles);
@@ -99,8 +100,8 @@ function removeNotExistItem(data, autoFix = false) {
                     const result = _.remove(items, contentItem);
                     console.log(`Item ${result[0].$.Include} deleted from csproj`);
                 } else {
-                    process.exit(1);
                     console.log(`File ${filePath} is not exist`);
+                    process.exit(1);
                 }
             }
         });
