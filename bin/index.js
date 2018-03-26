@@ -126,7 +126,7 @@ function findContentItem(data, cb) {
     const csprojDir = path.parse(path.resolve(flags.file));
     data.Project.ItemGroup.forEach(items => {
         _.forEach(items.Content, contentItem => {
-            const include = contentItem.$.Include;
+            const include = contentItem.$.Include.replace(/\\/g, '/');
             const filePath = path.join(csprojDir.dir, include);
 
             cb({
