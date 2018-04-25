@@ -6,6 +6,7 @@ const xml2js = require('xml2js');
 const args = require('args');
 const _ = require('lodash');
 const glob = require('glob');
+const child_process = require('child_process');
 /* const yesno = require('yesno');
  * */
 args
@@ -14,6 +15,14 @@ args
     .option('configFile', 'the config for scan files need include in csproj');
 
 const flags = args.parse(process.argv);
+
+function successLog(...args) {
+    console.log(...['\x1b[32m%s\x1b[0m'].concat(args));
+}
+
+function errorLog(...args) {
+    console.log(...['\x1b[31m%s\x1b[0m'].concat(args));
+}
 
 console.log('running csproj file sync by file:', flags.file);
 
@@ -73,22 +82,36 @@ function syncFilesToCsproj(data){
         .then(files => {
             const groupedFiles =  _.groupBy(files, file => _.includes(allIncludedFiles, file));
             const missingFilesInCsproj = groupedFiles.false;
+
             if (_.isEmpty(missingFilesInCsproj)) {
-                console.log('all good for csproj-sync');
+                successLog('all good for csproj-sync');
                 process.exit(0);
             }
 
             const itemGroupForMissingFiles = findItemGroupByFilePath(data, groupedFiles.true[0]);
 
-            console.log('missing below files in csproj');
-            missingFilesInCsproj.forEach(item => console.log(item));
+            correctFilesCaseByCsproj(missingFilesInCsproj, allIncludedFiles)
+                .then(filesAfterRename => {
+                    if (filesAfterRename.length === 0) {
+                        successLog('all good for csproj-sync after auto case fixing');
+                        process.exit(0);
+                        return;
+                    }
 
-            if (flags.autoFix) {
-                addMissingFileToCsproj(data, missingFilesInCsproj, itemGroupForMissingFiles);
-                return;
-            }
+                    errorLog('missing below files in csproj');
+                    filesAfterRename.forEach(item => console.log(item));
 
-            process.exit(1);
+                    if (flags.autoFix) {
+                        addMissingFileToCsproj(data, missingFilesInCsproj, itemGroupForMissingFiles);
+                        return;
+                    }
+
+                    process.exit(1);
+                })
+                .catch(err => {
+                    errorLog(err);
+                    process.exit(1);
+                });
         });
 }
 
@@ -185,4 +208,32 @@ function saveUpdatedFile(data) {
             process.exit(0);
         }
     });
+}
+
+function correctFilesCaseByCsproj(realFiles, allIncludedFiles) {
+    const filesNeedToChange = realFiles.map(realFile => {
+        const matchedFileInCsproj = allIncludedFiles.find(x => x.toLowerCase() === realFile.toLowerCase());
+        return {
+            isMatched: matchedFileInCsproj !== undefined,
+            newPath: matchedFileInCsproj,
+            originalPath: realFile,
+        };
+    });
+
+    const filesNeedToFix = filesNeedToChange.filter(x => x.isMatched);
+
+    if (filesNeedToFix) {
+        return Promise.all(filesNeedToFix.map(file => new Promise((res, rej) => {
+            fs.rename(file.originalPath, file.newPath, err => {
+                if (err) {
+                    rej(file.originalPath);
+                } else {
+                    successLog(`Auto fixed the case issue for ${file.originalPath}`);
+                    res(true);
+                }
+            });
+        }))).then(promisesResult => promisesResult.filter(result => result !== true));
+    } else {
+        return Promise.resolve(filesNeedToChange.filter(x => !x.isMatched));
+    }
 }
