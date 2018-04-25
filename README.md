@@ -4,6 +4,7 @@ csproj-synchronizer
 1. check csproj file's content, make sure all `<Content Include="sompath/foo/bar.js"></Content>` file is exist in project. if not exit with code 1.
 2. check all file is added into csproj file as index. if not throw error with exit code 1.
 3. [todo] Automaticly fix issues and overwrite back to csproj file.
+4. auto fix the cases issue, i.e. csproj file is fooBar.js but actually in disk is FooBar.js, after the fix the disk file will rename to fooBar.js
 
 ## Usage
 1. `npm i -g csproj-synchronizer`
