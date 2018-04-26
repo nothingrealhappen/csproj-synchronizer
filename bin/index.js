@@ -102,7 +102,10 @@ function syncFilesToCsproj(data) {
                     successLog(
                         'all good for csproj-sync after auto case fixing'
                     );
-                    process.exit(0);
+                    errorLog(
+                        'please retry commit to make sure the case is correct in git'
+                    );
+                    process.exit(1);
                     return;
                 }
 
