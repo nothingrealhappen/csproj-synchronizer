@@ -7,11 +7,13 @@ const args = require('args');
 const _ = require('lodash');
 const glob = require('glob');
 const child_process = require('child_process');
+const utils = require('../lib/utils');
+
 /* const yesno = require('yesno');
  * */
 args
     .option('file', 'the csproj file you want to sync')
-/* .option('autofix', 'automatic fix csproj file')*/
+    /* .option('autofix', 'automatic fix csproj file')*/
     .option('configFile', 'the config for scan files need include in csproj');
 
 const flags = args.parse(process.argv);
@@ -21,7 +23,7 @@ function successLog(...args) {
 }
 
 function errorLog(...args) {
-    console.log(...['\x1b[31m%s\x1b[0m'].concat(args));
+    console.log(...['\x1b[31mERROR: %s\x1b[0m'].concat(args));
 }
 
 console.log('running csproj file sync by file:', flags.file);
@@ -61,58 +63,64 @@ function fixCsprojFile(csprojData) {
     removeNotExistItem(csprojData);
     fs.readFile(flags.configFile, (err, data) => {
         if (err) {
-            console.error(err);
+            errorLog(err);
             process.exit(1);
         } else {
             try {
                 checkPathConfig = JSON.parse(data);
                 syncFilesToCsproj(csprojData);
-            } catch(e) {
+            } catch (e) {
+                errorLog(e);
                 process.exit(1);
             }
         }
     });
 }
 
-function syncFilesToCsproj(data){
+function syncFilesToCsproj(data) {
     const allIncludedFiles = [];
     findContentItem(data, ({ filePath }) => allIncludedFiles.push(filePath));
 
-    getScanFileList()
-        .then(files => {
-            const groupedFiles =  _.groupBy(files, file => _.includes(allIncludedFiles, file));
-            const missingFilesInCsproj = groupedFiles.false;
+    getScanFileList().then(files => {
+        console.log(`csproj has ${allIncludedFiles.length} listed`);
+        const groupedFiles = utils.groupFileByExistInList(
+            allIncludedFiles,
+            files
+        );
+        const missingFilesInCsproj = groupedFiles.notExist;
 
-            if (_.isEmpty(missingFilesInCsproj)) {
-                successLog('all good for csproj-sync');
-                process.exit(0);
-            }
+        if (_.isEmpty(missingFilesInCsproj)) {
+            successLog('all good for csproj-sync');
+            process.exit(0);
+        }
 
-            const itemGroupForMissingFiles = findItemGroupByFilePath(data, groupedFiles.true[0]);
+        // const itemGroupForMissingFiles = findItemGroupByFilePath(data, groupedFiles.true[0]);
 
-            correctFilesCaseByCsproj(missingFilesInCsproj, allIncludedFiles)
-                .then(filesAfterRename => {
-                    if (filesAfterRename.length === 0) {
-                        successLog('all good for csproj-sync after auto case fixing');
-                        process.exit(0);
-                        return;
-                    }
+        correctFilesCaseByCsproj(missingFilesInCsproj, allIncludedFiles)
+            .then(filesAfterRename => {
+                if (filesAfterRename.length === 0) {
+                    successLog(
+                        'all good for csproj-sync after auto case fixing'
+                    );
+                    process.exit(0);
+                    return;
+                }
 
-                    errorLog('missing below files in csproj');
-                    filesAfterRename.forEach(item => console.log(item));
+                errorLog('missing below files in csproj');
+                filesAfterRename.forEach(item => console.log(item));
 
-                    if (flags.autoFix) {
-                        addMissingFileToCsproj(data, missingFilesInCsproj, itemGroupForMissingFiles);
-                        return;
-                    }
+                // if (flags.autoFix) {
+                //     addMissingFileToCsproj(data, missingFilesInCsproj, itemGroupForMissingFiles);
+                //     return;
+                // }
 
-                    process.exit(1);
-                })
-                .catch(err => {
-                    errorLog(err);
-                    process.exit(1);
-                });
-        });
+                process.exit(1);
+            })
+            .catch(err => {
+                errorLog(err);
+                process.exit(1);
+            });
+    });
 }
 
 function removeNotExistItem(data, autoFix = false) {
@@ -121,7 +129,9 @@ function removeNotExistItem(data, autoFix = false) {
             if (err) {
                 if (autoFix) {
                     const result = _.remove(items, contentItem);
-                    console.log(`Item ${result[0].$.Include} deleted from csproj`);
+                    console.log(
+                        `Item ${result[0].$.Include} deleted from csproj`
+                    );
                 } else {
                     console.log(`File ${filePath} is not exist`);
                     process.exit(1);
@@ -138,10 +148,12 @@ function findItemGroupByFilePath(data, filePath) {
             return false;
         }
 
-        return !_.isEmpty(_.find(items.Content, content => {
-            const currentPath = path.join(csprojDir.dir, content.$.Include);
-            return currentPath === filePath;
-        }));
+        return !_.isEmpty(
+            _.find(items.Content, content => {
+                const currentPath = path.join(csprojDir.dir, content.$.Include);
+                return currentPath === filePath;
+            })
+        );
     });
 }
 
@@ -171,19 +183,29 @@ function getScanFileList() {
     return new Promise((res, rej) => {
         glob(
             globArrayToString(checkPathConfig.checkPath),
-            { ignore: checkPathConfig.ignorePath  },
+            { ignore: checkPathConfig.ignorePath },
             (err, files) => {
                 if (err) {
+                    errorLog(err);
                     rej(err);
                 } else {
-                    res(files.map(filePath => path.join(process.cwd(), filePath)));
+                    console.log(`scanning ${files.length} files on local disk`);
+                    res(
+                        files.map(filePath =>
+                            path.join(process.cwd(), filePath)
+                        )
+                    );
                 }
             }
         );
     });
 }
 
-function addMissingFileToCsproj(data, missingFilesInCsproj, itemGroupForMissingFiles) {
+function addMissingFileToCsproj(
+    data,
+    missingFilesInCsproj,
+    itemGroupForMissingFiles
+) {
     const content = itemGroupForMissingFiles.Content;
     console.log('added missing files to csproj file');
     const projFileDir = path.parse(path.resolve(flags.file)).dir + '\\';
@@ -192,7 +214,10 @@ function addMissingFileToCsproj(data, missingFilesInCsproj, itemGroupForMissingF
         content.push({ $: { Include: filePath.replace(projFileDir, '') } });
     });
 
-    itemGroupForMissingFiles.Content = _.sortBy(content, contentItem => contentItem.$.Include);
+    itemGroupForMissingFiles.Content = _.sortBy(
+        content,
+        contentItem => contentItem.$.Include
+    );
 
     saveUpdatedFile(data);
 }
@@ -201,18 +226,24 @@ function saveUpdatedFile(data) {
     const builder = new xml2js.Builder();
     const xml = builder.buildObject(data);
 
-    fs.writeFile(flags.file, xml.replace(/\/>/g, ' />').replace('&#xD;', ''), (err) => {
-        if (err) {
-            process.exit(1);
-        } else {
-            process.exit(0);
+    fs.writeFile(
+        flags.file,
+        xml.replace(/\/>/g, ' />').replace('&#xD;', ''),
+        err => {
+            if (err) {
+                process.exit(1);
+            } else {
+                process.exit(0);
+            }
         }
-    });
+    );
 }
 
 function correctFilesCaseByCsproj(realFiles, allIncludedFiles) {
     const filesNeedToChange = realFiles.map(realFile => {
-        const matchedFileInCsproj = allIncludedFiles.find(x => x.toLowerCase() === realFile.toLowerCase());
+        const matchedFileInCsproj = allIncludedFiles.find(
+            x => x.toLowerCase() === realFile.toLowerCase()
+        );
         return {
             isMatched: matchedFileInCsproj !== undefined,
             newPath: matchedFileInCsproj,
@@ -222,18 +253,31 @@ function correctFilesCaseByCsproj(realFiles, allIncludedFiles) {
 
     const filesNeedToFix = filesNeedToChange.filter(x => x.isMatched);
 
-    if (filesNeedToFix) {
-        return Promise.all(filesNeedToFix.map(file => new Promise((res, rej) => {
-            fs.rename(file.originalPath, file.newPath, err => {
-                if (err) {
-                    rej(file.originalPath);
-                } else {
-                    successLog(`Auto fixed the case issue for ${file.originalPath}`);
-                    res(true);
-                }
-            });
-        }))).then(promisesResult => promisesResult.filter(result => result !== true));
+    if (filesNeedToFix.length) {
+        return Promise.all(
+            filesNeedToFix.map(
+                file =>
+                    new Promise((res, rej) => {
+                        fs.rename(file.originalPath, file.newPath, err => {
+                            if (err) {
+                                rej(file.originalPath);
+                            } else {
+                                successLog(
+                                    `Auto fixed the case issue for ${
+                                        file.originalPath
+                                    }`
+                                );
+                                res(true);
+                            }
+                        });
+                    })
+            )
+        ).then(promisesResult =>
+            promisesResult.filter(result => result !== true)
+        );
     } else {
-        return Promise.resolve(filesNeedToChange.filter(x => !x.isMatched));
+        return Promise.resolve(
+            filesNeedToChange.filter(x => !x.isMatched).map(x => x.originalPath)
+        );
     }
 }

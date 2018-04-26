@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "jest",
+    "test:watch": "jest --watch"
   },
   "bin": {
     "csproj-sync": "./bin/index.js"
@@ -17,5 +18,8 @@
     "glob": "^7.1.2",
     "lodash": "^4.17.4",
     "xml2js": "^0.4.19"
+  },
+  "devDependencies": {
+    "jest": "^22.4.3"
   }
 }
